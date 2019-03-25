@@ -7,8 +7,13 @@ import matplotlib.pyplot as plt
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 """dcgan网络"""
 #模块1，生成数据，一个是图片，另外一个是2*2的随机向量。
-
-
+"""
+0 没有池化层，卷积层的步数为2
+1 在生成器和判别器中都使用bn
+2 深层架构中移除全连接层。
+3 生成器中，全都使用relu，最后一层使用tanh。
+4 判别器中全部使用leak——relu。
+"""
 
 g_channel=[256,128,64,3]
 d_channel=[32,64,128,256]
@@ -18,12 +23,13 @@ class data_gen(object):
     def __init__(self):
         self.log = 'D:\BaiduNetdiskDownload\img_align_celeba'
         self.dir = os.listdir(self.log)
-        self.batch_size=50
+        self.batch_size=128
+        self.z_size=4
         self.indicator=0
         self.img_gen()
         # self.next_batch()
         self.shuffle()
-    def img_gen(self):
+    def img_gen(self):#生成数据
         self.all_data = []
         for i in self.dir[0:1000]:
             path = os.path.join(self.log, i)
@@ -31,6 +37,9 @@ class data_gen(object):
             print('already loaded %s' % i)
             data = np.array(img,np.float32)/127.5-1
             self.all_data.append(data)
+        self.z_data=np.random.normal(0,1,[len(self.all_data),4]).astype(np.float32)
+
+
     def shuffle(self):
         p=np.int32(np.random.permutation(len(self.all_data)))
         self.all_data=np.array(self.all_data)[p]
@@ -41,69 +50,107 @@ class data_gen(object):
             self.indicator=0
         self.end_indicator=self.indicator+self.batch_size
         batch_data=self.all_data[0:self.end_indicator]
+        batch_z_data=self.z_data[0:self.end_indicator]
         self.indicator=self.end_indicator
-        return batch_data
-
-
-
-
-
-#
-# def conv2d(input):
-#     with tf.variable_scope('conv2d',reuse=tf.AUTO_REUSE):
-#         for i in range(3):
-#             conv2d_1=tf.layers.conv2d(input,32,kernel_size=[5,5],padding='same',strides=[2,2],activation=tf.nn.relu)
-#             input=conv2d_1
-#         return conv2d
-
-# def deconv2d(input,name,channel):
-#     with tf.variable_scope(name):
-#         deconv2d=tf.layers.conv2d_transpose(input,channel,padding='same',kernel_size=[5,5],strides=[2,2],activation=tf.nn.relu)
-#         return deconv2d
-
-
-
+        batch_data=np.pad(batch_data,[[0,0],[19,19],[39,39],[0,0]],'constant')
+        return batch_data,batch_z_data
 
 
 class discrim(object):
     def __init__(self):
-        self.batch_size = 50
+        self.batch_size = 128
         self.if_reuse=False
         self.d_channel = [32, 64, 128, 256]
-    def dis(self):
-        conv2d_data=tf.placeholder(tf.float32,[50,218,178,3])
+    def __call__(self,input):
         with tf.variable_scope('dis',reuse=tf.AUTO_REUSE):
-            input=conv2d_data
             tf.summary.image('images',input,max_outputs=5)
             for i in range(4):
                 conv2d_d=tf.layers.conv2d(input,filters=self.d_channel[i],
                                           kernel_size=[3,3],strides=[2,2],
-                                          padding='same')
-
+                                          activation=tf.nn.leaky_relu,
+                                          padding='SAME')
                 input=tf.layers.batch_normalization(conv2d_d)
             data=input
+            data=tf.layers.flatten(data)
+            data=tf.layers.dense(data,2)
+            self.varibel=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='dis')
+            return data
+
+class gen(object):
+    def __init__(self):
+        self.batch_size = 128
+        self.g_channel=[1024,512,256,128,3]
+        self.if_relu=tf.nn.relu
+        self.init_deconv2d_len=16
+        self.init_deconv2d_width=16
+        pass
+    def __call__(self,input):
+        with tf.variable_scope('gen',reuse=tf.AUTO_REUSE):
+            deconv2d_data=tf.layers.dense(input,
+                                          self.init_deconv2d_len*
+                                           self.init_deconv2d_width*(self.g_channel[0]))
+
+            deconv2d_data=tf.reshape(deconv2d_data,[self.batch_size,self.init_deconv2d_len,
+                                        self.init_deconv2d_width,self.g_channel[0]])
+            self.g_channel.remove(1024)
+            for i in range(len(self.g_channel)):
+                if i+1==len(self.g_channel):
+                    self.if_relu=tf.nn.tanh
+                deconv2d=tf.layers.conv2d_transpose(deconv2d_data,g_channel[i],
+                                                    [5,5],strides=[2,2],
+                                                    padding='SAME',
+                                                    activation=self.if_relu)
+                deconv2d_bn=tf.layers.batch_normalization(deconv2d)
+                deconv2d_data=deconv2d_bn
+
+            deconv2d_final=deconv2d_bn
+            tf.summary.image('img_gen', deconv2d_final)
+            self.vari=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='gen')
+            return deconv2d_final
+
+
+class dcgan(object):
+    #此时需要将生成的图片送给判别器，还需要把原始的图片给判别器。
+    def __init__(self):
+        pass
+    def train_net(self):
+        discr = discrim()
+        # out, input_place = discr.dis()
+        img_generator = gen()
+        # out_img, z_data_place = img_generator.deconv2d()
+        data_g=data_gen()
+        with tf.Session() as sess:
+            for i in range(1):
+                img_batch_data,z_data=data_g.next_batch()
+                sess.run(tf.global_variables_initializer())
+                fake_img=img_generator(z_data)
+                # real_img_dis=discr(img_batch_data)
+                # fake_img_dis=discr(fake_img)
+                # loss_on_real_to_real=tf.nn.sparse_softmax_cross_entropy_with_logits(tf.ones(128,1),real_img_dis)
+                print(fake_img)
+
+                # loss_on_fake_to_real=tf.nn.sparse_softmax_cross_entropy_with_logits(np.ones(128,1),fake_img_gen)
+
+data_g = data_gen()
+img_batch_data,z_data=data_g.next_batch()
+z_data=tf.convert_to_tensor(z_data)
+g=gen()
+sess=tf.Session()
+sess.run(tf.global_variables_initializer())
+print(sess.run(g(z_data)))
 
 
 
-            return data,conv2d_data
 
 
-
-discr=discrim()
-out,input_place=discr.dis()
-tf.summary.histogram('value',out)
-data_g=data_gen()
-img_batch_data=data_g.next_batch()
-
-with tf.Session() as sess:
-    writer=tf.summary.FileWriter('test',sess.graph)
-    merged=tf.summary.merge_all()
-    sess.run(tf.global_variables_initializer())
-    fetch=[out,merged]
-    conv2d_out,merge=sess.run(fetch,{input_place:img_batch_data})
-    writer.add_summary(merge)
-    print(conv2d_out.shape)
-
-
-
+        # with tf.Session() as sess:
+        #     writer=tf.summary.FileWriter('test',sess.graph)
+        #     merged=tf.summary.merge_all()
+        #
+        #     fetch=[out,out_img,merged]
+        #     conv2d_out,img_gen,merge=sess.run(fetch,{input_place:img_batch_data,z_data_place:z_data})
+        #     writer.add_summary(merge)
+        #     print(conv2d_out.shape)
+        #     print(img_gen.shape)
+        #
 
