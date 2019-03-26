@@ -54,8 +54,6 @@ class data_gen(object):
         self.indicator=self.end_indicator
         batch_data=np.pad(batch_data,[[0,0],[19,19],[39,39],[0,0]],'constant')
         return batch_data,batch_z_data
-
-
 class discrim(object):
     def __init__(self):
         self.batch_size = 128
@@ -63,6 +61,7 @@ class discrim(object):
         self.d_channel = [32, 64, 128, 256]
     def __call__(self,input):
         with tf.variable_scope('dis',reuse=tf.AUTO_REUSE):
+            input=tf.convert_to_tensor(input)
             tf.summary.image('images',input,max_outputs=5)
             for i in range(4):
                 conv2d_d=tf.layers.conv2d(input,filters=self.d_channel[i],
@@ -86,6 +85,7 @@ class gen(object):
         pass
     def __call__(self,input):
         with tf.variable_scope('gen',reuse=tf.AUTO_REUSE):
+            input=tf.convert_to_tensor(input)
             deconv2d_data=tf.layers.dense(input,
                                           self.init_deconv2d_len*
                                            self.init_deconv2d_width*(self.g_channel[0]))
@@ -112,45 +112,64 @@ class gen(object):
 class dcgan(object):
     #此时需要将生成的图片送给判别器，还需要把原始的图片给判别器。
     def __init__(self):
+        self.g=gen()
+        self.d=discrim()
         pass
-    def train_net(self):
-        discr = discrim()
-        # out, input_place = discr.dis()
-        img_generator = gen()
-        # out_img, z_data_place = img_generator.deconv2d()
-        data_g=data_gen()
-        with tf.Session() as sess:
-            for i in range(1):
-                img_batch_data,z_data=data_g.next_batch()
-                sess.run(tf.global_variables_initializer())
-                fake_img=img_generator(z_data)
-                # real_img_dis=discr(img_batch_data)
-                # fake_img_dis=discr(fake_img)
-                # loss_on_real_to_real=tf.nn.sparse_softmax_cross_entropy_with_logits(tf.ones(128,1),real_img_dis)
-                print(fake_img)
+    def train_net(self,img_batch_data, z_data):
+        g = gen()
+        d = discrim()
+        fake_img_gen = g(z_data)
+        real_img_dis = d(img_batch_data)
+        fake_img_dis = d(fake_img_gen)
+        #判别器中，真图判别为真
+        loss_on_real_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(128,tf.int32),logits=real_img_dis))
+        #生成器：让假的图判别为真。
+        loss_on_fake_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(128,tf.int32),logits=fake_img_dis))
+        # #判别器：让假的图片判别为假图。
+        loss_on_fake_to_fake=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.zeros(128,tf.int32),logits=fake_img_dis))
+        tf.add_to_collection('g_loss',loss_on_fake_to_real)
+        tf.add_to_collection('d_loss',loss_on_fake_to_fake)
+        tf.add_to_collection('d_loss',loss_on_real_to_real)
+        loss={'g':tf.add_n(tf.get_collection('g_loss'),name='g_total_loss'),
+                'd':tf.add_n(tf.get_collection('d_loss'),name='d_total_loss')}
 
-                # loss_on_fake_to_real=tf.nn.sparse_softmax_cross_entropy_with_logits(np.ones(128,1),fake_img_gen)
+        return loss
 
+    def train(self):
+        return gen().vari
+
+        # g_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['g'],var_list=self.g.vari)
+        # d_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['d'],var_list=self.d.varibel)
+        # with tf.control_dependencies(g_train_op,d_train_op):
+        #     return tf.no_op(name='train')
+
+        # return g_total_loss,d_total_loss
+        # with tf.Session() as sess:
+        #     for i in range(1):
+        #         img_batch_data,z_data=data_g.next_batch()
+        #         sess.run(tf.global_variables_initializer())
+        #         fake_img=img_generator(z_data)
+        #         # real_img_dis=discr(img_batch_data)
+        #         # fake_img_dis=discr(fake_img)
+
+
+dc=dcgan()
 data_g = data_gen()
-img_batch_data,z_data=data_g.next_batch()
-z_data=tf.convert_to_tensor(z_data)
-g=gen()
+img_batch_data, z_data = data_g.next_batch()
+loss=dc.train_net(img_batch_data, z_data)
 sess=tf.Session()
 sess.run(tf.global_variables_initializer())
-print(sess.run(g(z_data)))
+for i in range(1):
+    img_batch_data, z_data = data_g.next_batch()
+    train_all=dc.train()
+    fetch=[loss,train_all]
+    result=sess.run(fetch)
+    print(result[0])
 
 
 
 
 
-        # with tf.Session() as sess:
-        #     writer=tf.summary.FileWriter('test',sess.graph)
-        #     merged=tf.summary.merge_all()
-        #
-        #     fetch=[out,out_img,merged]
-        #     conv2d_out,img_gen,merge=sess.run(fetch,{input_place:img_batch_data,z_data_place:z_data})
-        #     writer.add_summary(merge)
-        #     print(conv2d_out.shape)
-        #     print(img_gen.shape)
-        #
+
+# print(sess.run([loss,loss1]))
 
