@@ -59,6 +59,8 @@ class discrim(object):
         self.batch_size = 128
         self.if_reuse=False
         self.d_channel = [32, 64, 128, 256]
+
+
     def __call__(self,input):
         with tf.variable_scope('dis',reuse=tf.AUTO_REUSE):
             input=tf.convert_to_tensor(input)
@@ -74,6 +76,17 @@ class discrim(object):
             data=tf.layers.dense(data,2)
             self.varibel=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='dis')
             return data
+"""
+dis=discrim()
+data_g = data_gen()
+img_batch_data, z_data = data_g.next_batch()
+data=dis(img_batch_data)
+print(dis.varibel)
+对于python里面的变量来说，一定需要先声明，才可以被初始化或者说是被导入。
+
+"""
+
+
 
 class gen(object):
     def __init__(self):
@@ -112,8 +125,6 @@ class gen(object):
 class dcgan(object):
     #此时需要将生成的图片送给判别器，还需要把原始的图片给判别器。
     def __init__(self):
-        self.g=gen()
-        self.d=discrim()
         pass
     def train_net(self,img_batch_data, z_data):
         g = gen()
@@ -132,25 +143,14 @@ class dcgan(object):
         tf.add_to_collection('d_loss',loss_on_real_to_real)
         loss={'g':tf.add_n(tf.get_collection('g_loss'),name='g_total_loss'),
                 'd':tf.add_n(tf.get_collection('d_loss'),name='d_total_loss')}
-
+        self.g_vari=g.vari
+        self.d_vari=d.varibel
         return loss
-
     def train(self):
-        return gen().vari
-
-        # g_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['g'],var_list=self.g.vari)
-        # d_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['d'],var_list=self.d.varibel)
-        # with tf.control_dependencies(g_train_op,d_train_op):
-        #     return tf.no_op(name='train')
-
-        # return g_total_loss,d_total_loss
-        # with tf.Session() as sess:
-        #     for i in range(1):
-        #         img_batch_data,z_data=data_g.next_batch()
-        #         sess.run(tf.global_variables_initializer())
-        #         fake_img=img_generator(z_data)
-        #         # real_img_dis=discr(img_batch_data)
-        #         # fake_img_dis=discr(fake_img)
+        g_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['g'],var_list=self.g_vari)
+        d_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['d'],var_list=self.d_vari)
+        with tf.control_dependencies([g_train_op,d_train_op]):
+            return tf.no_op(name='train')
 
 
 dc=dcgan()
@@ -165,7 +165,7 @@ for i in range(1):
     fetch=[loss,train_all]
     result=sess.run(fetch)
     print(result[0])
-
+#
 
 
 
