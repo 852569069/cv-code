@@ -130,6 +130,7 @@ class dcgan(object):
         g = gen()
         d = discrim()
         fake_img_gen = g(z_data)
+        tf.summary.image('fake_img',fake_img_gen)
         real_img_dis = d(img_batch_data)
         fake_img_dis = d(fake_img_gen)
         #判别器中，真图判别为真
@@ -147,8 +148,8 @@ class dcgan(object):
         self.d_vari=d.varibel
         return loss
     def train(self):
-        g_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['g'],var_list=self.g_vari)
-        d_train_op=tf.train.AdamOptimizer(0.0001).minimize(loss['d'],var_list=self.d_vari)
+        g_train_op=tf.train.AdamOptimizer(0.0001,beta1=0.5).minimize(loss['g'],var_list=self.g_vari)
+        d_train_op=tf.train.AdamOptimizer(0.0001,beta1=0.5).minimize(loss['d'],var_list=self.d_vari)
         with tf.control_dependencies([g_train_op,d_train_op]):
             return tf.no_op(name='train')
 
@@ -158,12 +159,15 @@ data_g = data_gen()
 img_batch_data, z_data = data_g.next_batch()
 loss=dc.train_net(img_batch_data, z_data)
 sess=tf.Session()
-sess.run(tf.global_variables_initializer())
+write=tf.summary.FileWriter('test',sess.graph)
+merged=tf.summary.merge_all()
 for i in range(1):
     img_batch_data, z_data = data_g.next_batch()
     train_all=dc.train()
-    fetch=[loss,train_all]
+    sess.run(tf.global_variables_initializer())
+    fetch=[loss,train_all,merged]
     result=sess.run(fetch)
+    write.add_summary(result[-1],i)
     print(result[0])
 #
 
