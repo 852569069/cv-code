@@ -78,8 +78,8 @@ class conv2d(object):
     def train(self):
         train_op=tf.train.AdamOptimizer(0.001).minimize(self.loss)
         return train_op
-
-data_Deal=Data_dael('data_batch_1')
+path=os.path.join('C:\\Users\\85256\OneDrive\学习资料\软件学习\深度学习\code\cv\data\cifar 10 data','data_batch_1')
+data_Deal=Data_dael(path)
 
 con=conv2d()
 input_plac,pre,images=con.conv2d_layer()
@@ -87,9 +87,8 @@ label_place,loss,acc=con.loss()
 train_op=con.train()
 
 with tf.Session() as sess:
-    write=tf.summary.FileWriter('test',sess.graph)
+    write=tf.summary.FileWriter('test2',sess.graph)
     merged=tf.summary.merge_all()
-
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
     for i in range(100000):
