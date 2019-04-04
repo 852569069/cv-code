@@ -55,7 +55,6 @@ class conv2d(object):
                                              kernel_size=[1,1],
                                              strides=[1,1],
                                              activation=tf.nn.relu)
-
                 conv2d_data=tf.layers.batch_normalization(conv2d_data)
                 conv2d_max_pool=tf.layers.max_pooling2d(conv2d_data,pool_size=[2,2],strides=[2,2])
                 input=conv2d_max_pool
