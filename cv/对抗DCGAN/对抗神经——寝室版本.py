@@ -71,7 +71,7 @@ class discrim(object):
                                           kernel_size=[3,3],strides=[2,2],
                                           activation=tf.nn.leaky_relu,
                                           padding='SAME')
-                input=tf.layers.batch_normalization(conv2d_d)
+                input=tf.layers.batch_normalization(conv2d_d,training=True)
             data=input
             data=tf.layers.flatten(data)
             data=tf.layers.dense(data,2)
@@ -114,7 +114,7 @@ class gen(object):
                                                     [5,5],strides=[2,2],
                                                     padding='SAME',
                                                     activation=self.if_relu)
-                deconv2d_bn=tf.layers.batch_normalization(deconv2d)
+                deconv2d_bn=tf.layers.batch_normalization(deconv2d,training=True)
                 deconv2d_data=deconv2d_bn
 
             deconv2d_final=deconv2d_bn
@@ -162,14 +162,14 @@ loss,fake_img=dc.train_net(img_batch_data, z_data)
 sess=tf.Session()
 # write=tf.summary.FileWriter('test1',sess.graph)
 # merged=tf.summary.merge_all()
-for i in range(100):
+for i in range(100000):
     img_batch_data, z_data = data_g.next_batch()
     train_all=dc.train()
     sess.run(tf.global_variables_initializer())
     fetch=[loss,train_all,fake_img]
     result=sess.run(fetch)
     print(result[0])
-    if (i+1)%2==0:
+    if (i+1)%1000==0:
         print(result[2][0])
         plt.imshow(result[2][0])
         plt.show()

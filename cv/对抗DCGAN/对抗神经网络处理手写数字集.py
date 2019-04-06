@@ -238,13 +238,13 @@ for i in range(10000):
     should_sample=(i+1)%10==0
     if should_sample:
         fetches+=[img_gen,merged]
-    all=sess.run(fetches,{z_placeholder:z_data,img_placeholder:img_data})
+    out_value,all=sess.run(fetches,{z_placeholder:z_data,img_placeholder:img_data})
     if should_sample:
         write_data.add_summary(all[-1],i+1)
         print(all[1])
-    # if should_sample:
-    #     plt.imshow((np.reshape(out_value[3][0],[32,32])+1)*127.5)
-    #     plt.show()
+    if should_sample:
+        plt.imshow((np.reshape(out_value[3][0],[32,32])+1)*127.5)
+        plt.show()
 
 
 

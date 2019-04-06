@@ -3,12 +3,17 @@ import os
 import collections
 import numpy as np
 import tensorflow.contrib as con
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
+import sys
+sys.path.append(r'./function')
+from file_deal import file_deal
 
+
+f=file_deal()
 class data_deal(object):
     def __init__(self):
-        self.dir='C:\\Users\85256\OneDrive\学习资料\软件学习\深度学习\code\cv\data\LSTM data'
+        self.dir='C:\\Users\\2\OneDrive\学习资料\软件学习\深度学习\code\cv\data\LSTM data'
         self.data_load()
+        self.indicator=0
 
     def data_load(self):
         all_file=os.listdir(self.dir)
@@ -26,14 +31,13 @@ class data_deal(object):
         counter=collections.Counter(all_word)
         word_id=dict(zip(counter,[i for i in range(len(counter))]))
         word_id['unk']=7559
-        id_word=dict(zip([i for i in range(len(counter))],counter))
+        self.id_word=dict(zip([i for i in range(len(counter))],counter))
+        self.id_word[7559]='unk'
         self.all_poem_id=[]
         for i in all_poem:
             poem_code=[word_id.get(l)  for l in i]
             self.all_poem_id.append(poem_code)
-        print(len(word_id))
         return self.all_poem_id
-
     """
     id转文字的操作。
 
@@ -43,17 +47,15 @@ class data_deal(object):
         print(word)
 
     """
-
     def poem_len_control(self):
         all_poem=[]
         for i in self.all_poem_id[0:3759]:
             if len(i)>80:
                 i=np.array(i[0:80])
                 all_poem.append(i)
-            elif len(i)>40 and len(i)<80:
+            elif len(i)>70 and len(i)<80:
                 i=np.pad(np.array(i),[0,80-len(i)],'constant',constant_values=(7559))
                 all_poem.append(i)
-
         result_poem=np.copy(all_poem)
         """
         此处注意,需要复制一份出来，
@@ -63,12 +65,35 @@ class data_deal(object):
         for l in result_poem:
             change=l[1:]
             l[0:-1]=change
-        return np.array(all_poem),result_poem
 
+        all_poem_test=f.next_batch(all_poem,256)
+        result_poem_test=f.next_batch(result_poem,256)
+        # def shuffle(input,input1):
+        #     m=len(input1)
+        #     p=np.random.permutation(m)
+        #     input=input[p]
+        #     input1=input[p]
+        #     return input,input1
+        #
+        #
+        # result_poem, all_poem=shuffle(result_poem,all_poem)
+        #
+        # end_indicator=self.indicator+5
+        # result_poem_test =result_poem[self.indicator:end_indicator]
+        # all_poem_test=all_poem[self.indicator:end_indicator]
+        return np.array(all_poem_test),result_poem_test
+
+    def id2word(self,input):
+        word=[self.id_word.get(i) for i in input]
+        sentence=''.join(str(i) for i in word)
+        return sentence
+
+data_deal=data_deal()
+result,final_poem=data_deal.poem_len_control()
 
 class auto_poem(object):
     def __init__(self,poem_num):
-        self.batch_size=100
+        self.batch_size=256
         self.embedding_size=128
         self.word_num=7600
         self.poem_num=poem_num
@@ -80,15 +105,17 @@ class auto_poem(object):
         with tf.variable_scope('embedding',initializer=tf.random_uniform_initializer(-1,1)):
             embedding_vari=tf.get_variable('embedding',[self.word_num,128],tf.float32)
             embedding_code=tf.nn.embedding_lookup(embedding_vari,input)
+            #在tensorflow中，变量才是可以训练的，用random生成的不是变量。
+
         with tf.variable_scope('lstm',reuse=tf.AUTO_REUSE):
-            basic_rnn=tf.nn.rnn_cell.BasicLSTMCell(num_units=128)
+            basic_rnn=tf.nn.rnn_cell.BasicLSTMCell(num_units=128,state_is_tuple = True)
             """
             #一个很重要的点，这个num_unit可以理解为LSTM节点内的神经元的个数。
             # 可以参考：https://www.zhihu.com/question/64470274。所以输入的数据是【batch_size,80,128】的数据。
             # 其中的80是有80个time_step.
             # 然后128也就是我们embedding编码之后的维度，就必须和神经元的个数对应。
             """
-            muti_lstm=tf.nn.rnn_cell.MultiRNNCell([basic_rnn for i in range(1)])
+            muti_lstm=tf.nn.rnn_cell.MultiRNNCell([basic_rnn])
             out,_=tf.nn.dynamic_rnn(muti_lstm,embedding_code,
                                     initial_state=muti_lstm.zero_state
                                     (self.batch_size,tf.float32))
@@ -98,6 +125,7 @@ class auto_poem(object):
 
         out=tf.reshape(out,[-1,self.embedding_size])
         out=tf.layers.dense(out,self.word_num)
+        pro=tf.nn.softmax(out)
         #此时，输出的结构时【8000，7600】.前者的8000时batch_size*time_step.
         # 也就是说，将batch_size个诗句中的所有的词都合并在一起。而且对应的结构是，【【诗句1】【诗句2】【诗句3】。。。。】。
         # 其中诗句里面是【字1，字2，字3.。。。】。
@@ -114,31 +142,41 @@ class auto_poem(object):
                                                          weights=[tf.ones_like([8000,],
                                                         dtype=tf.float32)])
         self.loss=tf.reduce_mean(loss)
+        acc=tf.metrics.accuracy(tf.argmax(out,axis=1),out_poem)
 
-        self.tvars = tf.trainable_variables()
-        self.grads,_=tf.clip_by_global_norm(tf.gradients(self.loss,self.tvars),5)
-
-
-        return input,output,self.loss,self.tvars
+        self.tvars = tf.trainable_variables()#为了获得所有可以训练的变量。
+        m=tf.gradients(self.loss, self.tvars)
+        self.grads,_=tf.clip_by_global_norm(m,1)
+        return input,output,out,self.loss,self.tvars,m,acc
     def train_op(self):
-        train=tf.train.AdamOptimizer(0.0001).apply_gradients(zip(self.grads,self.tvars))
+        train=tf.train.AdamOptimizer(0.01).apply_gradients(zip(self.grads,self.tvars))
+        # train=tf.train.AdamOptimizer(0.0001).minimize(self.loss)
         return train
-data_deal=data_deal()
-result,final_poem=data_deal.poem_len_control()
+
+print(result.shape)
 
 poem_num=len(result)
 auto_poem=auto_poem(poem_num)
-input_place,output_place,loss,tvar=auto_poem.lstm(result)
-print(tvar)
-
-for i in tvar:
-    print(i)
+input_place,output_place,out,loss,tvar,m,acc=auto_poem.lstm(result)
+tf.summary.scalar('loss',loss)
 train_op=auto_poem.train_op()
 
 sess=tf.Session()
 sess.run(tf.global_variables_initializer())
-for i in range(100):
-    fetch=[loss,train_op]
-    all=sess.run(fetch,{input_place:result[0:100],output_place:final_poem[0:100]})
-    print(all[0])
+sess.run(tf.local_variables_initializer())
+write=tf.summary.FileWriter('test',sess.graph)
+merged=tf.summary.merge_all()
+for i in range(100000):
+    result, final_poem, = data_deal.poem_len_control()
+    fetch=[loss,train_op,out,merged,acc]
+    all=sess.run(fetch,{input_place:result,output_place:final_poem})
+    # write.add_summary(all[-2],i)
+    # print(all[0])
+    print(all[-1][-1])
+    word=all[-3]
+    word=np.argmax(word[0:100],axis=1)
+    # for i in word:
+        # print(i)
+    print(data_deal.id2word(word))
+
 
