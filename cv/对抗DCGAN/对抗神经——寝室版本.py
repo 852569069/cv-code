@@ -2,8 +2,10 @@
 import tensorflow as tf
 import numpy as np
 import os
-import datetime
+import sys
 from PIL import Image
+# sys.path.append('./function')
+# from file_deal import file_deal
 import matplotlib.pyplot as plt
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 """dcgan网络"""
@@ -24,7 +26,7 @@ class data_gen(object):
     def __init__(self):
         self.log = 'G:\BaiduNetdiskDownload\img_align_celeba'
         self.dir = os.listdir(self.log)
-        self.batch_size=10
+        self.batch_size=100
         self.z_size=4
         self.indicator=0
         self.img_gen()
@@ -32,14 +34,13 @@ class data_gen(object):
         self.shuffle()
     def img_gen(self):#生成数据
         self.all_data = []
-        for i in self.dir[0:1000]:
+        for i in self.dir[0:10000]:
             path = os.path.join(self.log, i)
             img = Image.open(path)
             print('already loaded %s' % i)
             data = np.array(img,np.float32)/127.5-1
             self.all_data.append(data)
         self.z_data=np.random.normal(0,1,[len(self.all_data),4]).astype(np.float32)
-
 
     def shuffle(self):
         p=np.int32(np.random.permutation(len(self.all_data)))
@@ -50,13 +51,14 @@ class data_gen(object):
             self.shuffle()
             self.indicator=0
         self.end_indicator=self.indicator+self.batch_size
-        batch_data=self.all_data[0:self.end_indicator]
-        batch_z_data=self.z_data[0:self.end_indicator]
+        batch_data=self.all_data[self.indicator:self.end_indicator]
+        batch_z_data=self.z_data[self.indicator:self.end_indicator]
         self.indicator=self.end_indicator
         return batch_data,batch_z_data
+
 class discrim(object):
     def __init__(self):
-        self.batch_size = 10
+        self.batch_size = 100
         self.if_reuse=False
         self.d_channel = [32, 64, 128, 256]
 
@@ -91,7 +93,7 @@ print(dis.varibel)
 
 class gen(object):
     def __init__(self):
-        self.batch_size = 10
+        self.batch_size = 100
         self.g_channel=[1024,512,256,128,3]
         self.if_relu=tf.nn.relu
         self.init_deconv2d_len=16
@@ -118,7 +120,6 @@ class gen(object):
                 deconv2d_data=deconv2d_bn
 
             deconv2d_final=deconv2d_bn
-            tf.summary.image('img_gen', deconv2d_final)
             self.vari=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES,scope='gen')
             return deconv2d_final
 
@@ -135,11 +136,11 @@ class dcgan(object):
         real_img_dis = d(img_batch_data)
         fake_img_dis = d(fake_img_gen)
         #判别器中，真图判别为真
-        loss_on_real_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(10,tf.int32),logits=real_img_dis))
+        loss_on_real_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(100,tf.int32),logits=real_img_dis))
         #生成器：让假的图判别为真。
-        loss_on_fake_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(10,tf.int32),logits=fake_img_dis))
+        loss_on_fake_to_real=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.ones(100,tf.int32),logits=fake_img_dis))
         # #判别器：让假的图片判别为假图。
-        loss_on_fake_to_fake=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.zeros(10,tf.int32),logits=fake_img_dis))
+        loss_on_fake_to_fake=tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.zeros(100,tf.int32),logits=fake_img_dis))
         tf.add_to_collection('g_loss',loss_on_fake_to_real)
         tf.add_to_collection('d_loss',loss_on_fake_to_fake)
         tf.add_to_collection('d_loss',loss_on_real_to_real)
@@ -147,10 +148,12 @@ class dcgan(object):
                 'd':tf.add_n(tf.get_collection('d_loss'),name='d_total_loss')}
         self.g_vari=g.vari
         self.d_vari=d.varibel
+        tf.summary.scalar('loss',loss['g'])
+        tf.summary.scalar('loss1',loss['d'])
         return loss,fake_img_gen
     def train(self):
-        g_train_op=tf.train.AdamOptimizer(0.0001,beta1=0.5).minimize(loss['g'],var_list=self.g_vari)
-        d_train_op=tf.train.AdamOptimizer(0.0001,beta1=0.5).minimize(loss['d'],var_list=self.d_vari)
+        g_train_op=tf.train.AdamOptimizer(0.001,beta1=0.5).minimize(loss['g'],var_list=self.g_vari)
+        d_train_op=tf.train.AdamOptimizer(0.001,beta1=0.5).minimize(loss['d'],var_list=self.d_vari)
         with tf.control_dependencies([g_train_op,d_train_op]):
             return tf.no_op(name='train')
 
@@ -159,26 +162,24 @@ dc=dcgan()
 data_g = data_gen()
 img_batch_data, z_data = data_g.next_batch()
 loss,fake_img=dc.train_net(img_batch_data, z_data)
+train_all=dc.train()
 sess=tf.Session()
-# write=tf.summary.FileWriter('test1',sess.graph)
-# merged=tf.summary.merge_all()
+saver=tf.train.Saver()
+sess.run(tf.global_variables_initializer())
+saver.restore(sess,'ckp4699')
+write=tf.summary.FileWriter('test1',sess.graph)
+merged=tf.summary.merge_all()
+
 for i in range(100000):
     img_batch_data, z_data = data_g.next_batch()
-    train_all=dc.train()
-    sess.run(tf.global_variables_initializer())
     fetch=[loss,train_all,fake_img]
     result=sess.run(fetch)
-    print(result[0])
-    if (i+1)%1000==0:
-        print(result[2][0])
-        plt.imshow(result[2][0])
-        plt.show()
-
-#
+    if (i + 1) % 50 == 0:
+        m=sess.run(merged)
+        write.add_summary(m,i)
+        saver.save(sess,'ckp%d'%i)
+        print(loss)
 
 
 
-
-
-# print(sess.run([loss,loss1]))
 

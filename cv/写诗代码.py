@@ -8,12 +8,14 @@ sys.path.append(r'./function')
 from file_deal import file_deal
 
 
-f=file_deal()
+
 class data_deal(object):
     def __init__(self):
         self.dir='C:\\Users\\2\OneDrive\学习资料\软件学习\深度学习\code\cv\data\LSTM data'
         self.data_load()
         self.indicator=0
+        self.batch_size=256
+        self.poem_len_control()
 
     def data_load(self):
         all_file=os.listdir(self.dir)
@@ -65,23 +67,18 @@ class data_deal(object):
         for l in result_poem:
             change=l[1:]
             l[0:-1]=change
-
-        all_poem_test=f.next_batch(all_poem,256)
-        result_poem_test=f.next_batch(result_poem,256)
-        # def shuffle(input,input1):
-        #     m=len(input1)
-        #     p=np.random.permutation(m)
-        #     input=input[p]
-        #     input1=input[p]
-        #     return input,input1
-        #
-        #
-        # result_poem, all_poem=shuffle(result_poem,all_poem)
-        #
-        # end_indicator=self.indicator+5
-        # result_poem_test =result_poem[self.indicator:end_indicator]
-        # all_poem_test=all_poem[self.indicator:end_indicator]
-        return np.array(all_poem_test),result_poem_test
+        self.all_poem=np.array(all_poem)
+        self.result_poem=result_poem
+    def next_batch(self):
+        end_indicator=self.indicator+self.batch_size
+        if end_indicator>len(self.all_poem):
+            self.indicator=0
+            end_indicator=self.indicator+self.batch_size
+            np.random.shuffle(self.all_poem)
+        self.all_poem_test=self.all_poem[self.indicator:end_indicator]
+        self.result_poem_test=self.result_poem[self.indicator:end_indicator]
+        self.indicator=end_indicator
+        return self.all_poem_test,self.result_poem_test
 
     def id2word(self,input):
         word=[self.id_word.get(i) for i in input]
@@ -89,7 +86,7 @@ class data_deal(object):
         return sentence
 
 data_deal=data_deal()
-result,final_poem=data_deal.poem_len_control()
+result,final_poem=data_deal.next_batch()
 
 class auto_poem(object):
     def __init__(self,poem_num):
@@ -167,7 +164,7 @@ sess.run(tf.local_variables_initializer())
 write=tf.summary.FileWriter('test',sess.graph)
 merged=tf.summary.merge_all()
 for i in range(100000):
-    result, final_poem, = data_deal.poem_len_control()
+    result, final_poem, = data_deal.next_batch()
     fetch=[loss,train_op,out,merged,acc]
     all=sess.run(fetch,{input_place:result,output_place:final_poem})
     # write.add_summary(all[-2],i)
