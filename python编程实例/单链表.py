@@ -14,14 +14,14 @@ class Node(object):
 class singlelink(object):
     def __init__(self,node=None):
         self.__head=node
-        self.next=None
     #此处创建一个头节点，本身为空，不指向任何东西。
     #头节点本身就是只是用来指向地址的，不存储任何数值。
+    #所以考虑None的情况的时候，要细致的考虑清楚。
 
     #判断是否为空。
     def is_empty(self):
-        self.__head=None#也就是说，头节点没有指向任何地址。所以列表为空。
-        return True
+        return self.__head==None#也就是说，头节点没有指向任何地址。所以列表为空。
+
     #长度
     def length(self):
         #整理一下思路。首先输入某个节点，
@@ -30,40 +30,56 @@ class singlelink(object):
         while curr != None:
             count+=1
             curr=curr.next
-        return count
+        print('length:',count)
     #
     def travel(self):
         #很佩服语言的严谨性，把这个地址称之为指针。数值输入时，指针就移到了链表的第一个node上。
         # 改变指针的位置通过当前节点node。next就可以实现。
         #历遍和计算长度比较类似。先找到指针的初始位置。
         curr=self.__head
-        while curr.next==None:
+        while curr!=None:
             print(curr.elem,end=' ')
             curr=curr.next
 
     def append(self,item):
-        #尾插法
-
-        pass
-    def add(self,item):
-        #头插法。
+        curr=self.__head
         node=Node(item)
-        prenode=self.__head
+        if curr == None:
+            self.__head=node
+        else:
+            while curr.next!=None:
+                curr=curr.next
+            curr.next=node
+
+    def add(self,item):
+        node=Node(item)
+        curr=self.__head
+        node.next=curr
         self.__head=node
-        node.next=prenode
+
+
 
     def insert(self,pos,item):
         #中间插入的方式。首先找到位置。
-        curr=self.__head
+        # curr=self.__head
+        # node=Node(item)
+        # po=0
+        # while po!=pos-1:
+        #     curr=curr.next
+        #     po+=1
+        # node.next=curr.next
+        # curr.next=node
         node=Node(item)
-        po=0
-        while po!=pos-1:
-            curr=curr.next
-            po+=1
-        node.next=curr.next
-        curr.next=node
-
-
+        if self.is_empty():
+            self.__head=node
+        else:
+            curr=self.__head
+            count=0
+            while count !=(pos-1):
+                curr=curr.next
+                count+=1
+            node.next=curr.next
+            curr.next=node
     def remove(self,item):
         #用两个游标，或者说时指针。
         pre=None
@@ -85,20 +101,41 @@ class singlelink(object):
                 curr=curr.next
             curr=curr.next.next
             del curr.next
+
+
     def search(self,item):
+        curr=self.__head
+        #需要搜索到尾部，如果只是单纯的看有没有值等于该数值，
+        # 会出错，到最后一个值的时候还在跑。
+        count=0
+        while curr.next!=None:
+            count+=1
+            if curr.elem==item:
+                return count
+            else:
+                curr=curr.next
+        return -1
 
-        pass
 
 
 
-node1=Node(3)
-node2=Node(2)
-node3=Node(4)
+if __name__ == '__main__':
+    sll=singlelink()
+    sll.append(3)
+    sll.append(6)
+    sll.add(5)
+    sll.append(8)
+    sll.insert(2,5)
+    sll.travel()
 
-node1.next=node2
-node2.next=node3
 
-sll=singlelink(node1)
+
+    print(sll.search(6))
+
+
+
+
+
 
 
 
