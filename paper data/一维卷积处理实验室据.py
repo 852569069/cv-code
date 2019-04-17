@@ -81,5 +81,5 @@ def con1d():
             saver.save(sess,'./ckp_TEST/ckp%d'%i)
         print(result[-1])
         print(result[-2][-1])
-
-con = con1d()
+if __name__ == '__main__':
+    con = con1d()
