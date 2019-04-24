@@ -101,8 +101,8 @@ def con1d():
             all=sess.run(meged,{input_pla:x,labels:y})
             write.add_summary(all,i)
             saver.save(sess,'./ckp_TEST/ckp%d'%i)
-        print(result[-1])
-        print(result[-2][-1])
+        print('loss:',result[-1],'\n')
+        print('acc:',result[-2][-1])
 
 if __name__ == '__main__':
     con = con1d()
