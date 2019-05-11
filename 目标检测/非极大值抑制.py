@@ -87,6 +87,5 @@ if __name__ == '__main__':
     # before nms
     bbox(boxes, 'k')
     remain = nms(boxes, threshold=0.6)
-
     # after nms
     bbox(boxes[remain], 'r')
